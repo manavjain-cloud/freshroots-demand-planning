@@ -101,7 +101,7 @@ async function ImportsData() {
                 <p className="text-sm font-medium text-ink-1">
                   #{batch.id} · {DATASET_INFO[batch.dataset].label} · {batch.fileName} · {fmtDateTime(batch.createdAt)}
                 </p>
-                <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-line">
+                <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="Rejected import errors, scrollable">
                   <table className="rn-table">
                     <thead>
                       <tr>
@@ -130,7 +130,7 @@ async function ImportsData() {
       ) : null}
 
       <Card title="Import history" description="Most recent first">
-        <div className="max-h-96 overflow-auto">
+        <div className="max-h-96 overflow-auto" tabIndex={0} role="region" aria-label="Import history, scrollable">
           <table className="rn-table">
             <thead>
               <tr>

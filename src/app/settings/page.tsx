@@ -230,7 +230,7 @@ async function SettingsData() {
             </ul>
           </Card>
           <Card title="Ownership" description="Proposed owners are not confirmed until the project owner agrees">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Ownership table, scrollable">
               <table className="rn-table">
                 <thead>
                   <tr>
@@ -272,7 +272,7 @@ async function SettingsData() {
           </ul>
         </Card>
         <Card title="Audit log" description="Imports, runs, reviews and configuration changes">
-          <div className="max-h-96 overflow-auto">
+          <div className="max-h-96 overflow-auto" tabIndex={0} role="region" aria-label="Audit log, scrollable">
             <table className="rn-table">
               <thead>
                 <tr>

@@ -5,6 +5,7 @@ import { Loader2, RotateCcw, Save } from "lucide-react";
 import { resetConfigAction, saveConfigAction, type ActionState } from "@/app/actions";
 import { CONFIG_PROVENANCE, type RuleConfig } from "@/lib/rules/config";
 import { ActionToast } from "./toast";
+import { useHydrated } from "./use-hydrated";
 import { ReviewerNameField, useReviewerName } from "./review-panel";
 import { cn } from "./ui";
 
@@ -48,6 +49,7 @@ export function ConfigForm({ config }: { config: RuleConfig }) {
   const [state, save, saving] = useActionState<ActionState, FormData>(saveConfigAction, null);
   const [resetState, reset, resetting] = useActionState<ActionState, FormData>(resetConfigAction, null);
   const [name, setName] = useReviewerName();
+  const hydrated = useHydrated();
   return (
     <div className="space-y-4">
       <form action={save} className="space-y-4">
@@ -91,7 +93,7 @@ export function ConfigForm({ config }: { config: RuleConfig }) {
           <ReviewerNameField value={name} onChange={setName} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" className="rn-btn rn-btn-primary" disabled={saving}>
+          <button type="submit" className="rn-btn rn-btn-primary" disabled={!hydrated || saving}>
             {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
             Save as new version
           </button>
@@ -106,7 +108,7 @@ export function ConfigForm({ config }: { config: RuleConfig }) {
       </form>
       <form action={reset}>
         <input type="hidden" name="reviewerName" value={name} />
-        <button type="submit" className="rn-btn rn-btn-ghost" disabled={resetting}>
+        <button type="submit" className="rn-btn rn-btn-ghost" disabled={!hydrated || resetting}>
           <RotateCcw className="size-4" aria-hidden /> Reset to case defaults
         </button>
         <ActionToast state={resetState} />

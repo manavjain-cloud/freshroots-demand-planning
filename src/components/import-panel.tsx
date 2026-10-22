@@ -5,6 +5,7 @@ import { FileUp, Loader2, RotateCcw } from "lucide-react";
 import { importUploadAction, reimportSeedAction, type ActionState } from "@/app/actions";
 import { DATASET_INFO, DATASETS } from "@/lib/imports/validate";
 import { ActionToast } from "./toast";
+import { useHydrated } from "./use-hydrated";
 import { ReviewerNameField, useReviewerName } from "./review-panel";
 import { cn } from "./ui";
 
@@ -22,7 +23,7 @@ function Result({ state }: { state: ActionState }) {
             {i.rowsTotal} rows · {i.inserted} new · {i.updated} updated · {i.unchanged} unchanged
           </p>
           {i.errors.length ? (
-            <div className="mt-2 max-h-60 overflow-auto rounded border border-line">
+            <div className="mt-2 max-h-60 overflow-auto rounded border border-line" tabIndex={0} role="region" aria-label="Import errors, scrollable">
               <table className="rn-table">
                 <thead>
                   <tr>
@@ -65,6 +66,7 @@ export function ImportPanel() {
   const [upState, upload, uploading] = useActionState<ActionState, FormData>(importUploadAction, null);
   const [seedState, reseed, seeding] = useActionState<ActionState, FormData>(reimportSeedAction, null);
   const [name, setName] = useReviewerName();
+  const hydrated = useHydrated();
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       <form action={upload} className="space-y-3">
@@ -90,7 +92,7 @@ export function ImportPanel() {
           <input name="file" type="file" accept=".csv,text/csv" required className="rn-input file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-sm file:text-ink-1" />
         </label>
         <ReviewerNameField value={name} onChange={setName} />
-        <button type="submit" className="rn-btn rn-btn-primary" disabled={uploading}>
+        <button type="submit" className="rn-btn rn-btn-primary" disabled={!hydrated || uploading}>
           {uploading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <FileUp className="size-4" aria-hidden />}
           {uploading ? "Validating…" : "Validate and import"}
         </button>
@@ -104,7 +106,7 @@ export function ImportPanel() {
           Re-reads the five original files ({DATASETS.map((d) => DATASET_INFO[d].seedFile).join(", ")}) in dependency order. Safe to repeat: unchanged rows are left as they are.
         </p>
         <input type="hidden" name="reviewerName" value={name} />
-        <button type="submit" className="rn-btn rn-btn-ghost" disabled={seeding}>
+        <button type="submit" className="rn-btn rn-btn-ghost" disabled={!hydrated || seeding}>
           {seeding ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RotateCcw className="size-4" aria-hidden />}
           {seeding ? "Importing…" : "Re-import seed files"}
         </button>

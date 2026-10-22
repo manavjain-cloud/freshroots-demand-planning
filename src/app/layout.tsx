@@ -29,11 +29,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <MobileNav />
-            <div className="border-b border-line bg-bg/60 px-4 py-2.5 backdrop-blur md:px-8">
+            <section aria-label="Data freshness and actions" className="border-b border-line bg-bg/60 px-4 py-2.5 backdrop-blur md:px-8">
               <Suspense fallback={<Skeleton className="h-8 w-full max-w-xl" />}>
                 <TopBarStatus />
               </Suspense>
-            </div>
+            </section>
             <main id="main" className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 md:py-8">
               {children}
             </main>

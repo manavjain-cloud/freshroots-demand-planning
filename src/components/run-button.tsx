@@ -4,10 +4,12 @@ import { useActionState } from "react";
 import { Loader2, Play } from "lucide-react";
 import { runPlanningAction, type ActionState } from "@/app/actions";
 import { ActionToast } from "./toast";
+import { useHydrated } from "./use-hydrated";
 
 export function RunPlanningButton({ snapshots }: { snapshots: { asOfDate: string; location: string }[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(runPlanningAction, null);
-  const disabled = pending || snapshots.length === 0;
+  const hydrated = useHydrated();
+  const disabled = !hydrated || pending || snapshots.length === 0;
   return (
     <form action={action} className="flex items-center gap-2">
       {snapshots.length > 1 ? (

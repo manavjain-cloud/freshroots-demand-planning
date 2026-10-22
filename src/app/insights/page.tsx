@@ -178,7 +178,7 @@ async function InsightsData() {
       </div>
 
       <Card title="Pilot baseline (from the case)" description={`Source: ${BASELINE_SOURCE}. Recorded ${fmtDate(BASELINE_RECORDED_ON)}. These are the starting point for measurement, not results of this tool.`}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Pilot baseline table, scrollable">
           <table className="rn-table">
             <thead>
               <tr>
@@ -221,7 +221,7 @@ async function InsightsData() {
         </Card>
         <Card title="Run history" description="Each run stores its inputs hash, configuration and engine version">
           {runs.length ? (
-            <div className="max-h-80 overflow-auto">
+            <div className="max-h-80 overflow-auto" tabIndex={0} role="region" aria-label="Run history, scrollable">
               <table className="rn-table">
                 <thead>
                   <tr>

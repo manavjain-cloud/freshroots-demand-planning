@@ -99,7 +99,7 @@ async function SkuDetail({ params }: { params: PageProps<"/skus/[skuId]">["param
         )}
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer text-xs font-medium text-ink-2 hover:text-ink-1">Show weekly values (table view)</summary>
-          <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-line">
+          <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="Weekly sales values, scrollable">
             <table className="rn-table">
               <thead>
                 <tr>
@@ -163,7 +163,7 @@ async function SkuDetail({ params }: { params: PageProps<"/skus/[skuId]">["param
 
       <Card title="Recommendation history" description="Every run that included this SKU, with the human decision recorded against it">
         {d.history.length ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Recommendation history, scrollable">
             <table className="rn-table">
               <thead>
                 <tr>
@@ -263,7 +263,7 @@ function Calculation({ rec, config, supply }: { rec: RecRow & { steps: { step: s
       {supply.data?.openLines.length ? (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Open purchase orders (Zoho, read-only)</h3>
-          <div className="overflow-x-auto rounded-lg border border-line">
+          <div className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label="Open purchase orders, scrollable">
             <table className="rn-table">
               <thead>
                 <tr>

@@ -103,9 +103,9 @@ export function MobileNav() {
   return (
     <Suspense
       fallback={
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur lg:hidden">
           <Brand />
-        </div>
+        </header>
       }
     >
       <MobileNavInner />
@@ -124,7 +124,7 @@ function MobileNavInner() {
   }, [open]);
   const current = NAV.find((n) => isActive(pathname, n.href));
   return (
-    <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur lg:hidden">
       <Brand />
       <div className="flex items-center gap-2">
         <span className="text-xs text-ink-3">{current?.label}</span>
@@ -142,6 +142,6 @@ function MobileNavInner() {
           </nav>
         </div>
       ) : null}
-    </div>
+    </header>
   );
 }

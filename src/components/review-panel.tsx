@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, MessageSquarePlus, PencilLine, ShieldAlert, XCir
 import { reviewAction, type ActionState } from "@/app/actions";
 import type { DecisionRow } from "@/lib/server/queries";
 import { pushToast } from "./global-toast";
+import { useHydrated } from "./use-hydrated";
 import { ReviewPill, REVIEW_LABEL } from "./pills";
 import { cn } from "./ui";
 
@@ -74,6 +75,7 @@ export function ReviewPanel({
   }, null);
   const [decision, setDecision] = useState<Decision>(calculatedQty === null ? "edit" : "approve");
   const [name, setName] = useReviewerName();
+  const hydrated = useHydrated();
 
   const options: { value: Decision; label: string; icon: typeof CheckCircle2; disabled?: boolean; hint?: string }[] = [
     { value: "approve", label: "Approve", icon: CheckCircle2, disabled: calculatedQty === null, hint: calculatedQty === null ? "No calculated quantity" : undefined },
@@ -118,13 +120,12 @@ export function ReviewPanel({
           <input type="hidden" name="decision" value={decision} />
           <fieldset>
             <legend className="mb-1.5 text-xs font-medium text-ink-2">Decision</legend>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {options.map((o) => (
                 <button
                   key={o.value}
                   type="button"
-                  role="radio"
-                  aria-checked={decision === o.value}
+                  aria-pressed={decision === o.value}
                   disabled={o.disabled}
                   title={o.hint}
                   onClick={() => setDecision(o.value)}
@@ -158,7 +159,7 @@ export function ReviewPanel({
           <ReviewerNameField value={name} onChange={setName} />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.6875rem] leading-snug text-ink-3">Approval means reviewed for procurement consideration. It does not create or send a purchase order.</p>
-            <button type="submit" className="rn-btn rn-btn-primary shrink-0" disabled={pending}>
+            <button type="submit" className="rn-btn rn-btn-primary shrink-0" disabled={!hydrated || pending}>
               {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               {pending ? "Saving…" : { approve: "Approve", edit: "Save quantity", reject: "Reject", note: "Add note" }[decision]}
             </button>

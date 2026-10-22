@@ -229,7 +229,7 @@ export function PlanningTable({ rows, initialRisk = "", runId, zohoSynced = fals
       </div>
 
       {/* Desktop table */}
-      <div className="hidden max-h-[70vh] overflow-auto md:block">
+      <div className="hidden max-h-[70vh] overflow-auto md:block" tabIndex={0} role="region" aria-label="Demand planning table, scrollable">
         <table className="rn-table min-w-[1560px]">
           <thead>
             <tr>
