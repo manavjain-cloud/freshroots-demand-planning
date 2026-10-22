@@ -8,6 +8,8 @@ import { createRun, NoInventorySnapshotError, saveRuleConfig } from "@/lib/serve
 import { ReviewError, submitReview } from "@/lib/server/reviews";
 import { actorLabel } from "@/lib/server/audit";
 import { DEFAULT_RULE_CONFIG, RuleConfigSchema } from "@/lib/rules/config";
+import { getZohoConfig, ZohoError, ZohoReadClient } from "@/lib/integrations/zoho";
+import { runZohoSync } from "@/lib/server/zoho-sync";
 
 export type ActionState = {
   ok: boolean;
@@ -154,5 +156,41 @@ export async function resetConfigAction(_prev: ActionState, formData: FormData):
     return { ok: true, message: `Defaults restored as configuration v${id}. Applies to the next run.`, at: Date.now() };
   } catch (err) {
     return fail(err, "The configuration could not be reset.");
+  }
+}
+
+/* ------------------------------ Zoho (read-only) ------------------------------ */
+
+export async function zohoTestAction(): Promise<ActionState> {
+  try {
+    const cfg = getZohoConfig();
+    if (!cfg.configured) return { ok: false, message: `Zoho is not configured. Missing: ${cfg.missing.join(", ")}.`, at: Date.now() };
+    try {
+      const orgs = await new ZohoReadClient(cfg).organizations();
+      const match = orgs.find((o) => o.organizationId === cfg.organizationId);
+      return match
+        ? { ok: true, message: `Connected to Zoho organisation “${match.name}” (${match.organizationId}). Read-only.`, at: Date.now() }
+        : { ok: false, message: `Credentials work, but organisation ${cfg.organizationId} is not one of: ${orgs.map((o) => `${o.name} (${o.organizationId})`).join(", ") || "none"}.`, at: Date.now() };
+    } catch (err) {
+      return { ok: false, message: err instanceof ZohoError ? err.message : "Could not reach Zoho.", at: Date.now() };
+    }
+  } catch (err) {
+    return fail(err, "The Zoho connection test failed.");
+  }
+}
+
+export async function zohoSyncAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    try {
+      const s = await runZohoSync(getDb(), { actor: actorLabel(str(formData, "reviewerName")) });
+      refresh();
+      return s.status === "succeeded"
+        ? { ok: true, message: `Zoho sync #${s.id} finished: ${s.openPoLines} open PO line(s), ${s.leadTimeObservations} lead-time observation(s), ${s.apiCalls} API calls.${s.warnings.length ? ` ${s.warnings.length} warning(s).` : ""}`, at: Date.now() }
+        : { ok: false, message: `Zoho sync #${s.id} failed: ${s.error}`, at: Date.now() };
+    } catch (err) {
+      return { ok: false, message: err instanceof ZohoError ? err.message : "The Zoho sync failed.", at: Date.now() };
+    }
+  } catch (err) {
+    return fail(err, "The Zoho sync failed.");
   }
 }

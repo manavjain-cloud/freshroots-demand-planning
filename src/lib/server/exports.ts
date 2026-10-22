@@ -1,6 +1,7 @@
 import type { Queryable } from "../db/client";
 import { round, toCsv, type CsvColumn } from "../csv";
 import { ACTION_LABEL, DEMAND_LABEL, EXCEPTION_INFO, RISK_LABEL } from "../rules/engine";
+import { getZohoSupplyBySku, type ZohoSkuSupply } from "./zoho-sync";
 import { getBacktests, getDataHealth, getLatestRun, getRun, getRunRecommendations, getWeeklyTotals, type RecRow, type RunHeader } from "./queries";
 
 export const REPORTS = {
@@ -12,7 +13,7 @@ export const REPORTS = {
 } as const;
 export type ReportKey = keyof typeof REPORTS;
 
-export function recommendationColumns(run: RunHeader): CsvColumn<RecRow>[] {
+export function recommendationColumns(run: RunHeader, supply: Map<string, ZohoSkuSupply> | null = null): CsvColumn<RecRow>[] {
   return [
     { header: "Run_ID", value: (r) => r.runId },
     { header: "Inventory_As_Of", value: () => run.asOfDate },
@@ -30,6 +31,8 @@ export function recommendationColumns(run: RunHeader): CsvColumn<RecRow>[] {
     { header: "Festival_Factor", value: (r) => r.metrics.festivalFactor },
     { header: "Forward_Demand_Per_Week", value: (r) => round(r.forwardDemand, 2) },
     { header: "Current_Stock", value: (r) => r.currentStock },
+    { header: "On_Order_Zoho", value: (r) => (supply ? (supply.get(r.skuId)?.onOrder ?? null) : null) },
+    { header: "Observed_Lead_Time_Days_Zoho", value: (r) => (supply ? (supply.get(r.skuId)?.leadTime?.median ?? null) : null) },
     { header: "Weeks_Of_Stock", value: (r) => round(r.weeksOfStock, 2) },
     { header: "Min_Weeks", value: (r) => r.metrics.minWeeks },
     { header: "Max_Weeks", value: (r) => r.metrics.maxWeeks },
@@ -56,7 +59,8 @@ export async function buildReport(q: Queryable, report: ReportKey, opts: { runId
       const run = opts.runId ? await getRun(q, opts.runId) : await getLatestRun(q);
       if (!run) return null;
       const rows = await getRunRecommendations(q, run.id);
-      return { filename: `freshroots-recommendations-run${run.id}-${stamp}.csv`, csv: toCsv(recommendationColumns(run), rows) };
+      const zoho = await getZohoSupplyBySku(q);
+      return { filename: `freshroots-recommendations-run${run.id}-${stamp}.csv`, csv: toCsv(recommendationColumns(run, zoho.sync ? zoho.bySku : null), rows) };
     }
     case "review-log": {
       const r = await q.query<{ id: number; created_at: Date; run_id: number; sku_id: string; decision: string; calculated_qty: number | null; final_qty: number | null; reason: string | null; note: string | null; reviewer_name: string | null; identity_verified: boolean }>(

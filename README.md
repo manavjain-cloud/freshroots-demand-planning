@@ -16,7 +16,7 @@ Built for the MESA AI-Native Track, Term 2 case ("Deepa's 90-Day Mandate" — Op
 | **Data Imports** | Upload/validate CSVs (all-or-nothing, row-level errors), re-import seed files, data-quality checklist, import history |
 | **Rules & Settings** | Versioned rule configuration with provenance (case / assumption / proposed), precedence, open policy decisions, integration status, Nine Checks, pre-build decisions, ownership, audit log |
 
-What it does **not** do: create or send purchase orders, connect to Zoho, claim forecast accuracy for the rule-based recommendations, or claim savings/ROI.
+What it does **not** do: create or send purchase orders, write to Zoho, claim forecast accuracy for the rule-based recommendations, or claim savings/ROI.
 
 ## Stack
 
@@ -45,7 +45,7 @@ npm run dev
 | `AI_MODEL`, `AI_MODEL_FALLBACKS`, `AI_TIMEOUT_MS` | No | Model selection and timeout (default 30 s) |
 | `AI_RATE_LIMIT_PER_HOUR`, `AI_RATE_LIMIT_GLOBAL_PER_DAY` | No | Defaults 30 per client per hour, 300 per day |
 | `BASIC_AUTH_USER`, `BASIC_AUTH_PASSWORD` | No | Optional shared site password (not per-user identity) |
-| `ZOHO_*` | No | Placeholders for the next phase; unused |
+| `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORGANIZATION_ID` | No | Read-only Zoho Inventory access; see [docs/zoho-setup.md](docs/zoho-setup.md). Optional `ZOHO_ACCOUNTS_DOMAIN` / `ZOHO_API_DOMAIN` (India defaults) |
 
 Secrets are read only on the server. Nothing is exposed with a `NEXT_PUBLIC_` prefix.
 
@@ -69,6 +69,8 @@ Put a Google AI Studio key in `GEMINI_API_KEY` to call the Gemini API directly, 
 | `npm run check` | All of the above + build |
 | `npm run db:migrate` | Apply SQL migrations in `db/migrations` |
 | `npm run db:seed` | Migrate, import `data/seed/*.csv`, create a run |
+| `npm run zoho:token -- <code>` | One-time: exchange a Zoho Self Client code for a refresh token (saved to `.env.local`, never printed) |
+| `npm run zoho:sync` | Read-only sync of Zoho items, purchase orders and receives |
 
 ## Deploying to Vercel
 
@@ -97,7 +99,7 @@ See [docs/data-model.md](docs/data-model.md). The five original seed files are k
 
 ## Testing
 
-`npm test` runs 77 tests, including every case in the brief's test list:
+`npm test` runs 88 tests, including every case in the brief's test list:
 
 | Brief item | Where |
 |---|---|
@@ -111,6 +113,7 @@ See [docs/data-model.md](docs/data-model.md). The five original seed files are k
 | 14 Gemini timeout, malformed / off-schema JSON (with one retry), 429, invented figures | `tests/ai.test.ts` |
 | 15 approve / edit / reject / note, guards, superseded runs | `tests/workflows.db.test.ts` |
 | 16 CSV export accuracy and escaping | `tests/workflows.db.test.ts` |
+| Zoho read-only client, SKU mapping, on-order, lead times, GET-only, failures | `tests/zoho.test.ts` |
 
 Database tests run against an in-memory Postgres (PGlite) with the real migrations.
 
@@ -127,15 +130,15 @@ src/lib/rules/        Rule configuration + deterministic engine
 src/lib/imports/      CSV validation
 src/lib/server/       Database queries, imports, runs, reviews, exports, AI service
 src/lib/ai/           Gemini provider adapter, prompts, schemas, grounding check
-src/lib/integrations/ Zoho interface (disabled)
+src/lib/integrations/ Zoho Inventory read-only client
 tests/                Vitest suites
 ```
 
 ## Known limitations
 
 - 16 weeks of history, 15 SKUs, 4 distributors and one inventory snapshot — a pilot sample; no multi-year seasonality.
-- No open POs, lead times, prices or stockout events, so projected cover ignores stock on order and no financial impact is calculated.
+- No prices or stockout events, so no financial impact is calculated. Stock on order and observed lead times appear once Zoho is connected, but the rules do not net them off (policy decision P9).
 - No user authentication; reviewer names are self-declared (see [docs/governance.md](docs/governance.md)).
 - Open policy questions (coverage average, perishable quantity, festival month basis, kill-criterion thresholds) need owner sign-off.
-- Zoho Inventory is not connected ([docs/zoho-integration.md](docs/zoho-integration.md)).
+- Zoho Inventory: read-only integration built and tested with fixtures, awaiting credentials and a first live check ([docs/zoho-setup.md](docs/zoho-setup.md)). Draft purchase orders are not built ([docs/zoho-integration.md](docs/zoho-integration.md)).
 - The visual design follows the Red Noir description in the brief (colours, fonts, conic border, grid texture); the original Red Noir HTML reference file was not available in the workspace.

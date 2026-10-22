@@ -9,7 +9,9 @@ import { dbOrNull } from "@/lib/server/page";
 import { getActiveConfig } from "@/lib/server/runs";
 import { getAuditLog, listRuleConfigs } from "@/lib/server/queries";
 import { aiStatus } from "@/lib/server/ai";
-import { getZohoStatus, ZOHO_ENV_VARS } from "@/lib/integrations/zoho";
+import { getZohoStatus, ZOHO_READ_SCOPES, ZOHO_REQUIRED_ENV } from "@/lib/integrations/zoho";
+import { getLatestZohoSyncs } from "@/lib/server/zoho-sync";
+import { ZohoActions } from "@/components/zoho-panel";
 import { NINE_CHECKS, OPEN_POLICY_DECISIONS, OWNERSHIP, PRE_BUILD_DECISIONS, RULE_PRECEDENCE } from "@/lib/governance";
 import { ENGINE_VERSION } from "@/lib/rules/config";
 import { fmtDateTime } from "@/lib/format";
@@ -47,6 +49,7 @@ async function SettingsData() {
   const [active, history, audit] = await Promise.all([getActiveConfig(db), listRuleConfigs(db, 10), getAuditLog(db, 40)]);
   const ai = aiStatus();
   const zoho = getZohoStatus();
+  const zohoSyncs = await getLatestZohoSyncs(db);
   const basicAuth = !!process.env.BASIC_AUTH_USER && !!process.env.BASIC_AUTH_PASSWORD;
 
   return (
@@ -108,8 +111,12 @@ async function SettingsData() {
             <p className="flex items-center gap-2 text-sm font-medium text-ink-1">
               <Plug className="size-4 text-ink-3" aria-hidden /> Zoho Inventory
             </p>
-            <Status warn label={zoho.state === "not_configured" ? "Not connected — next phase" : "Settings present, not verified"} />
-            <p className="mt-1 text-xs text-ink-3">{zoho.message} Reads and writes are disabled. Needed: {ZOHO_ENV_VARS.join(", ")}, plus confirmed scopes and field mappings.</p>
+            <Status
+              ok={zohoSyncs.latest?.status === "succeeded"}
+              warn={zohoSyncs.latest?.status !== "succeeded"}
+              label={zoho.state === "not_configured" ? "Not connected" : zohoSyncs.latest ? (zohoSyncs.latest.status === "succeeded" ? "Read-only · synced" : "Last sync failed") : "Configured · not synced yet"}
+            />
+            <p className="mt-1 text-xs text-ink-3">{zoho.message} See the Zoho section below.</p>
           </li>
           <li className="rounded-lg border border-line bg-white/[0.02] p-3">
             <p className="flex items-center gap-2 text-sm font-medium text-ink-1">
@@ -121,6 +128,80 @@ async function SettingsData() {
             </p>
           </li>
         </ul>
+      </Card>
+
+      <Card
+        id="zoho"
+        title="Zoho Inventory (read-only)"
+        description="Reads items, purchase orders and purchase receives to show stock on order and an observed lead time per SKU. Never writes to Zoho; rules still use on-hand stock only."
+      >
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="space-y-3 text-[0.8125rem] text-ink-2">
+            {zoho.state === "not_configured" ? (
+              <Notice tone="warning" title="Not connected">
+                Missing: {zoho.missing.join(", ")}. Read-only scopes needed: {ZOHO_READ_SCOPES.join(", ")}. Setup steps are in docs/zoho-setup.md.
+              </Notice>
+            ) : null}
+            {zohoSyncs.latest ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div>
+                  <dt className="text-xs text-ink-3">Last sync</dt>
+                  <dd className="text-ink-1">
+                    #{zohoSyncs.latest.id} · {zohoSyncs.latest.status} · {fmtDateTime(zohoSyncs.latest.finishedAt ?? zohoSyncs.latest.startedAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">Items mapped to SKUs</dt>
+                  <dd className="tabular text-ink-1">
+                    {zohoSyncs.latest.itemsMapped} of {zohoSyncs.latest.itemsSeen}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">Purchase orders read</dt>
+                  <dd className="tabular text-ink-1">
+                    {zohoSyncs.latest.purchaseOrdersSeen} ({zohoSyncs.latest.poDetailsFetched} in detail)
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">Open PO lines · lead-time observations</dt>
+                  <dd className="tabular text-ink-1">
+                    {zohoSyncs.latest.openPoLines} · {zohoSyncs.latest.leadTimeObservations}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">API calls used</dt>
+                  <dd className="tabular text-ink-1">{zohoSyncs.latest.apiCalls}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">PO statuses seen</dt>
+                  <dd className="text-ink-1">{zohoSyncs.latest.statusValuesSeen.join(", ") || "—"}</dd>
+                </div>
+              </dl>
+            ) : zoho.state === "configured" ? (
+              <p>Credentials are set. Run a sync to load purchase orders and lead times.</p>
+            ) : null}
+            {zohoSyncs.latest?.error ? <Notice tone="critical" title="Sync error">{zohoSyncs.latest.error}</Notice> : null}
+            {zohoSyncs.latest?.warnings.length ? (
+              <ul className="list-disc space-y-1 pl-5 text-xs text-warning">
+                {zohoSyncs.latest.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            ) : null}
+            {zohoSyncs.lastSuccess && zohoSyncs.latest?.id !== zohoSyncs.lastSuccess.id ? (
+              <p className="text-xs text-ink-3">Pages keep showing data from the last successful sync (#{zohoSyncs.lastSuccess.id}).</p>
+            ) : null}
+          </div>
+          <div className="space-y-3 text-[0.8125rem] text-ink-2">
+            <ZohoActions configured={zoho.state === "configured"} />
+            <ul className="list-disc space-y-1 pl-5 text-xs text-ink-3">
+              <li>Zoho items are matched to Freshroots SKUs by their SKU field (e.g. SKU001).</li>
+              <li>“On order” = ordered minus received on purchase orders that are not draft, awaiting approval, cancelled or closed.</li>
+              <li>Observed lead time = days from PO date to first goods receipt, median of past POs. Zoho has no supplier lead-time field.</li>
+              <li>Required settings: {ZOHO_REQUIRED_ENV.join(", ")} (+ ZOHO_ACCOUNTS_DOMAIN / ZOHO_API_DOMAIN outside India).</li>
+            </ul>
+          </div>
+        </div>
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -220,7 +301,7 @@ async function SettingsData() {
         </Card>
       </div>
 
-      <Notice>Approving a recommendation records a review decision only. This version cannot create, send or sync purchase orders.</Notice>
+      <Notice>Approving a recommendation records a review decision only. This version reads from Zoho but cannot create, send or change purchase orders.</Notice>
     </div>
   );
 }

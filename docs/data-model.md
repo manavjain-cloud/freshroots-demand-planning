@@ -1,6 +1,6 @@
 # Data model and import process
 
-Schema: [`db/migrations/001_init.sql`](../db/migrations/001_init.sql), applied by `npm run db:migrate` (tracked in `schema_migrations`). Do not create tables by hand in the Neon console.
+Schema: [`db/migrations/001_init.sql`](../db/migrations/001_init.sql) and [`002_zoho_readonly.sql`](../db/migrations/002_zoho_readonly.sql), applied by `npm run db:migrate` (tracked in `schema_migrations`). Do not create tables by hand in the Neon console.
 
 ## Tables
 
@@ -20,7 +20,11 @@ Schema: [`db/migrations/001_init.sql`](../db/migrations/001_init.sql), applied b
 | `review_decisions` | `id`; FK → recommendation | Append-only human decisions: approved / edited / rejected / note, calculated vs final qty, reason, note, self-declared reviewer name, `identity_verified = false`, timestamp |
 | `ai_explanations` | `id` | Cached Gemini outputs (scope, ref id, provider, model, JSON content, grounding warnings) |
 | `ai_rate_limits` | `(bucket, window_start)` | Fixed-window counters for AI endpoints (client IPs are hashed) |
-| `audit_log` | `id` | Imports, runs, reviews and configuration changes |
+| `audit_log` | `id` | Imports, runs, reviews, configuration changes and Zoho syncs |
+| `zoho_sync_runs` | `id` | One per read-only Zoho sync: status, counts, API calls, PO statuses seen, warnings, error |
+| `zoho_items` | `(sync_id, zoho_item_id)` | Zoho items and their matched Freshroots `sku_id` |
+| `zoho_po_lines` | `(sync_id, purchaseorder_id, line_item_id)` | PO lines with ordered / received / outstanding quantity and an `is_open` flag |
+| `zoho_lead_time_obs` | `(sync_id, sku_id, purchaseorder_id)` | Observed lead time: PO date to first receive date |
 
 Constraints enforce non-negative units, positive standard reorder quantity, allowed perishability/status values, ISO week format and months 1–12.
 
@@ -43,4 +47,4 @@ Seed import order: distributors → SKUs → weekly sales → inventory → cale
 
 ## Data not supplied (shown as "Not available")
 
-Open purchase orders, supplier lead times, prices, costs, confirmed stockout events and multi-year history. The 15 SKUs / 4 distributors are a pilot sample; the case describes 400 SKUs and 1,200 distributors.
+Prices, costs, confirmed stockout events and multi-year history. Open purchase orders and observed lead times come from Zoho Inventory once it is connected (read-only). The 15 SKUs / 4 distributors are a pilot sample; the case describes 400 SKUs and 1,200 distributors.

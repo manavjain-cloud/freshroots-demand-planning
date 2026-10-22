@@ -22,6 +22,8 @@ export interface PlanRow {
   recentAvg: number | null;
   baselineAvg: number | null;
   currentStock: number | null;
+  /** Outstanding on open Zoho POs; null when Zoho has not been synced or the SKU is not mapped. */
+  onOrder: number | null;
   weeksOfStock: number | null;
   minWeeks: number;
   maxWeeks: number;
@@ -35,7 +37,7 @@ export interface PlanRow {
   exceptionCodes: ExceptionCode[];
 }
 
-type SortKey = "skuId" | "category" | "latestWeekUnits" | "recentAvg" | "baselineAvg" | "currentStock" | "weeksOfStock" | "recommendedQty" | "risk" | "status";
+type SortKey = "skuId" | "category" | "latestWeekUnits" | "recentAvg" | "baselineAvg" | "currentStock" | "onOrder" | "weeksOfStock" | "recommendedQty" | "risk" | "status";
 const RISK_ORDER: InventoryRisk[] = ["stockout_risk", "perishable_below_min", "overstock_risk", "perishable_above_max", "no_recent_demand", "insufficient_data", "within_range"];
 const RISK_FILTERS = [
   { value: "", label: "All risk types" },
@@ -68,7 +70,7 @@ function matchesRisk(r: PlanRow, risk: string) {
   }
 }
 
-export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow[]; initialRisk?: string; runId: number }) {
+export function PlanningTable({ rows, initialRisk = "", runId, zohoSynced = false }: { rows: PlanRow[]; initialRisk?: string; runId: number; zohoSynced?: boolean }) {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [distributor, setDistributor] = useState("");
@@ -146,6 +148,7 @@ export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow
         { header: "Avg_4wk", value: (r) => (r.recentAvg === null ? null : Math.round(r.recentAvg * 100) / 100) },
         { header: "Avg_12wk", value: (r) => (r.baselineAvg === null ? null : Math.round(r.baselineAvg * 100) / 100) },
         { header: "Current_Stock", value: (r) => r.currentStock },
+        { header: "On_Order_Zoho", value: (r) => r.onOrder },
         { header: "Weeks_Of_Stock", value: (r) => (r.weeksOfStock === null ? null : Math.round(r.weeksOfStock * 100) / 100) },
         { header: "Demand", value: (r) => DEMAND_LABEL[r.demandClass] },
         { header: "Inventory_Risk", value: (r) => RISK_LABEL[r.inventoryRisk] },
@@ -227,7 +230,7 @@ export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow
 
       {/* Desktop table */}
       <div className="hidden max-h-[70vh] overflow-auto md:block">
-        <table className="rn-table min-w-[1480px]">
+        <table className="rn-table min-w-[1560px]">
           <thead>
             <tr>
               <Th k="skuId" className="min-w-[190px]">SKU</Th>
@@ -237,6 +240,7 @@ export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow
               <Th k="recentAvg" className="text-right">4-wk avg</Th>
               <Th k="baselineAvg" className="text-right">12-wk avg</Th>
               <Th k="currentStock" className="text-right">Stock</Th>
+              {zohoSynced ? <Th k="onOrder" className="text-right">On order</Th> : null}
               <Th k="weeksOfStock" className="text-right">Wks of stock</Th>
               <Th k="risk">Demand · risk</Th>
               <Th k="recommendedQty" className="text-right">Rec. qty</Th>
@@ -271,6 +275,7 @@ export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow
                 <td className="tabular text-right">{n1(r.recentAvg, 1)}</td>
                 <td className="tabular text-right">{n1(r.baselineAvg, 1)}</td>
                 <td className="tabular text-right">{n1(r.currentStock)}</td>
+                {zohoSynced ? <td className="tabular text-right" title="Outstanding on open Zoho purchase orders (not used by the rules)">{r.onOrder === null ? <span className="text-ink-3">n/a</span> : n1(r.onOrder)}</td> : null}
                 <td className="tabular text-right">
                   <span className="font-semibold text-ink-1">{n1(r.weeksOfStock, 1)}</span>
                   <div className="text-[0.6875rem] text-ink-3">
@@ -338,6 +343,7 @@ export function PlanningTable({ rows, initialRisk = "", runId }: { rows: PlanRow
                 <dt className="text-ink-3">Stock · weeks</dt>
                 <dd className="text-ink-1">
                   {n1(r.currentStock)} · {n1(r.weeksOfStock, 1)}
+                  {zohoSynced && r.onOrder ? <span className="block text-ink-3">+{n1(r.onOrder)} on order</span> : null}
                 </dd>
               </div>
               <div>

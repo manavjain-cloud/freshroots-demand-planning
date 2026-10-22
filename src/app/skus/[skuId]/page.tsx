@@ -13,6 +13,8 @@ import { AiExplanationPanel } from "@/components/ai-panels";
 import { dbOrNull } from "@/lib/server/page";
 import { getSkuDetail, weekShortLabel, type RecRow } from "@/lib/server/queries";
 import { getActiveConfig } from "@/lib/server/runs";
+import { getZohoSupplyBySku, type ZohoSkuSupply } from "@/lib/server/zoho-sync";
+import { getZohoStatus } from "@/lib/integrations/zoho";
 import { ACTION_LABEL, DEMAND_LABEL, RISK_LABEL } from "@/lib/rules/engine";
 import { isoWeekMonth } from "@/lib/weeks";
 import { fmtDate, fmtDateTime, fmtMonth, fmtNum, fmtSignedPct } from "@/lib/format";
@@ -45,6 +47,8 @@ async function SkuDetail({ params }: { params: PageProps<"/skus/[skuId]">["param
   const cal = await db.query<{ year_month: string; is_festival_month: boolean }>("SELECT year_month, is_festival_month FROM calendar_months");
   const festival = new Map(cal.rows.map((c) => [c.year_month, c.is_festival_month]));
   const { config: activeConfig } = await getActiveConfig(db);
+  const zoho = await getZohoSupplyBySku(db);
+  const supply: SupplyView = { synced: !!zoho.sync, configured: getZohoStatus().state === "configured", syncedAt: zoho.sync?.finishedAt ?? null, data: zoho.bySku.get(d.sku.skuId) ?? null };
   const m = rec?.metrics;
   const config = (rec ? ((await db.query<{ config: RuleConfig }>("SELECT config FROM recommendation_runs WHERE id = $1", [rec.runId])).rows[0]?.config ?? activeConfig) : activeConfig) as RuleConfig;
   const chartData = d.sales.map((s) => ({ week: s.week, label: weekShortLabel(s.week, s.weekStart), units: s.units, festival: festival.get(isoWeekMonth(s.week)) === true }));
@@ -123,7 +127,7 @@ async function SkuDetail({ params }: { params: PageProps<"/skus/[skuId]">["param
       {rec && m ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <Card title="Calculation" description={`Run #${rec.runId} · engine output, recomputable from the stored inputs and configuration`}>
-            <Calculation rec={rec} config={config} />
+            <Calculation rec={rec} config={config} supply={supply} />
           </Card>
           <Card title="Applicable business rules" description="Raghav's documented rules as applied to this SKU">
             <RulesApplied rec={rec} config={config} />
@@ -201,7 +205,15 @@ async function SkuDetail({ params }: { params: PageProps<"/skus/[skuId]">["param
   );
 }
 
-function Calculation({ rec, config }: { rec: RecRow & { steps: { step: string; rule: string; result: string }[] }; config: RuleConfig }) {
+type SupplyView = { synced: boolean; configured: boolean; syncedAt: string | null; data: ZohoSkuSupply | null };
+
+function supplyReason(s: SupplyView): string {
+  if (!s.configured) return "Zoho Inventory is not connected";
+  if (!s.synced) return "Zoho is configured but has not been synced yet";
+  return "No Zoho item has this SKU";
+}
+
+function Calculation({ rec, config, supply }: { rec: RecRow & { steps: { step: string; rule: string; result: string }[] }; config: RuleConfig; supply: SupplyView }) {
   const m = rec.metrics;
   return (
     <div className="space-y-5">
@@ -233,11 +245,53 @@ function Calculation({ rec, config }: { rec: RecRow & { steps: { step: string; r
             value: `${ACTION_LABEL[rec.action]}${rec.recommendedQty !== null ? ` · ${fmtNum(rec.recommendedQty)} units` : ""}`,
             hint: rec.recommendedQtyRaw !== null ? `Raw ${rec.recommendedQtyRaw}; rounding: ${config.roundingMode}` : "No rule-defined quantity",
           },
-          { label: "Projected cover after reorder", value: m.projectedWeeksAfterOrder === null ? "—" : `${fmtNum(m.projectedWeeksAfterOrder, 2)} weeks`, hint: "Ignores lead time and open orders (not available)" },
-          { label: "Open purchase orders", value: <Unavailable reason="Not supplied; planned Zoho Inventory integration" /> },
-          { label: "Supplier lead time", value: <Unavailable reason="Not supplied; planned Zoho Inventory integration" /> },
+          { label: "Projected cover after reorder", value: m.projectedWeeksAfterOrder === null ? "—" : `${fmtNum(m.projectedWeeksAfterOrder, 2)} weeks`, hint: "Rule quantity added to on-hand stock; excludes open orders and lead time" },
+          {
+            label: "On order (Zoho, open POs)",
+            value: supply.data ? `${fmtNum(supply.data.onOrder)} units` : <Unavailable reason={supplyReason(supply)} />,
+            hint: supply.data
+              ? `${supply.data.openLines.length} open line(s) · synced ${fmtDateTime(supply.syncedAt)}${supply.data.onOrder > 0 && m.forwardDemand ? ` · cover incl. on-order ${fmtNum(((m.currentStock ?? 0) + supply.data.onOrder) / m.forwardDemand, 2)} wks (informational, not used by the rules)` : ""}`
+              : supplyReason(supply),
+          },
+          {
+            label: "Observed lead time (Zoho history)",
+            value: supply.data?.leadTime ? `${fmtNum(supply.data.leadTime.median, 1)} days (median)` : <Unavailable reason={supply.data ? "No received purchase orders for this SKU in the history window" : supplyReason(supply)} />,
+            hint: supply.data?.leadTime ? `PO date → first receipt over ${supply.data.leadTime.n} PO(s), range ${supply.data.leadTime.min}–${supply.data.leadTime.max} days. Observed, not a supplier commitment.` : undefined,
+          },
         ]}
       />
+      {supply.data?.openLines.length ? (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Open purchase orders (Zoho, read-only)</h3>
+          <div className="overflow-x-auto rounded-lg border border-line">
+            <table className="rn-table">
+              <thead>
+                <tr>
+                  <th>PO</th>
+                  <th>Status</th>
+                  <th>Ordered on</th>
+                  <th>Expected</th>
+                  <th className="text-right">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supply.data.openLines.map((l, i) => (
+                  <tr key={i}>
+                    <td>
+                      {l.purchaseorderNumber ?? "—"}
+                      <div className="text-[0.6875rem] text-ink-3">{l.vendorName ?? ""}</div>
+                    </td>
+                    <td className="text-xs">{l.poStatus?.replace(/_/g, " ") ?? "—"}</td>
+                    <td className="text-xs">{l.poDate ? fmtDate(l.poDate) : "—"}</td>
+                    <td className="text-xs">{l.expectedDeliveryDate ? fmtDate(l.expectedDeliveryDate) : "Not set"}</td>
+                    <td className="tabular text-right">{fmtNum(l.outstanding)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Rule-engine trace</h3>
         <ol className="space-y-2">

@@ -27,7 +27,7 @@ export const PRE_BUILD_DECISIONS = [
 export const NINE_CHECKS = [
   { group: "Kill switch", check: "Problem real?", answer: "Yes — the case documents ₹18–22 lakh/quarter stockout losses and ₹10–12 lakh/quarter overstock write-offs. Used as rationale only; the tool has not yet reduced any loss." },
   { group: "Kill switch", check: "Workflow repeated?", answer: "Yes — demand planning is a recurring monthly process. Every run here is stored with its inputs, configuration and engine version so it can be repeated and audited." },
-  { group: "Kill switch", check: "Input available?", answer: "Partly — five seed files (15 SKUs, 16 weeks, 4 distributors, one snapshot). SAP holds three years of distributor-level sales that IT can export. Open POs, lead times, prices and costs are not supplied and are shown as unavailable." },
+  { group: "Kill switch", check: "Input available?", answer: "Partly — five seed files (15 SKUs, 16 weeks, 4 distributors, one snapshot). SAP holds three years of distributor-level sales that IT can export. Open POs and observed lead times can be read from Zoho Inventory (read-only) once connected; prices and costs are not supplied." },
   { group: "Sizing", check: "Output valuable?", answer: "Demand classification, stock-risk flags and rule-based reorder recommendations with a full calculation trace, for planner review." },
   { group: "Sizing", check: "Impact measurable?", answer: "Review outcomes, review time, flags and baseline-method error are captured from day one. Business impact (lost sales, write-offs) needs post-pilot actuals that are not in the seed data." },
   { group: "Sizing", check: "ROI worth it?", answer: "Not yet known. The app exports evidence (recommendations, decisions, evaluation, data quality) to support the evaluation. No savings or ROI figures are claimed." },
@@ -54,6 +54,7 @@ export const OPEN_POLICY_DECISIONS = [
   { id: "P6", question: "Is high demand allowed to override an overstock pause?", current: "No — pause wins and the conflict is escalated to the planner.", why: "The two rules conflict; the case gives no precedence." },
   { id: "P7", question: "Is the 'unusual latest week' signal (30% deviation) wanted?", current: "Proposed signal only, can be disabled.", why: "Not a case rule; intended to surface the judgment cases Raghav describes." },
   { id: "P8", question: "What are the numerical kill-criterion thresholds?", current: "Not set.", why: "Must be agreed with the project owner before launch." },
+  { id: "P9", question: "Should stock on open Zoho purchase orders count towards weeks of stock?", current: "No — shown beside the recommendation for context; rules use on-hand stock only, as in the case.", why: "Netting on-order stock would reduce reorders but depends on PO data quality and delivery dates." },
 ];
 
 export const RULE_PRECEDENCE = [

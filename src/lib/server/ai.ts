@@ -5,6 +5,7 @@ import { AiUnavailableError, getAiConfig } from "../ai/provider";
 import { ACTION_LABEL, DEMAND_LABEL, EXCEPTION_INFO, RISK_LABEL, type DemandClass, type ExceptionCode, type InventoryRisk, type RecommendationAction, type SkuMetrics } from "../rules/engine";
 import type { RuleConfig } from "../rules/config";
 import { round } from "../csv";
+import { getZohoSupplyBySku } from "./zoho-sync";
 
 export interface StoredAi<T> {
   id: number;
@@ -100,7 +101,25 @@ export async function buildRecommendationFacts(q: Queryable, recommendationId: n
       exceptions: x.exception_codes.map((c) => ({ name: EXCEPTION_INFO[c as ExceptionCode]?.label ?? c, meaning: EXCEPTION_INFO[c as ExceptionCode]?.description ?? c })),
       rule_engine_reason: x.reason,
     },
-    unavailable_data: ["open purchase orders", "supplier lead times", "prices and costs"],
+    ...(await supplyFacts(q, x.sku_id)),
+  };
+}
+
+async function supplyFacts(q: Queryable, skuId: string): Promise<Record<string, unknown>> {
+  const { sync, bySku } = await getZohoSupplyBySku(q);
+  const s = bySku.get(skuId);
+  if (!sync || !s) {
+    return { unavailable_data: ["open purchase orders", "supplier lead times", "prices and costs"] };
+  }
+  return {
+    zoho_supply_read_only: {
+      units_on_open_purchase_orders: s.onOrder,
+      next_expected_delivery: s.openLines[0]?.expectedDeliveryDate ?? null,
+      observed_lead_time_days_median: s.leadTime?.median ?? null,
+      observed_lead_time_sample_size: s.leadTime?.n ?? 0,
+      note: "Shown for context. The rule-based quantity does not subtract stock on order.",
+    },
+    unavailable_data: ["prices and costs", ...(s.leadTime ? [] : ["observed lead time"])],
   };
 }
 

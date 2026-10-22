@@ -10,7 +10,8 @@ import { ReviewPanel } from "@/components/review-panel";
 import { AiExplanationPanel } from "@/components/ai-panels";
 import { byPriority, dbOrNull } from "@/lib/server/page";
 import { getDecisions, getLatestRun, getRunRecommendations, type RecRow } from "@/lib/server/queries";
-import { fmtDateTime, fmtNum } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtNum } from "@/lib/format";
+import { getZohoSupplyBySku } from "@/lib/server/zoho-sync";
 import { cn } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Recommendations" };
@@ -57,6 +58,8 @@ async function RecData({ searchParams }: { searchParams: PageProps<"/recommendat
   const requested = Number.isFinite(recParam) ? rows.find((r) => r.id === recParam) : undefined;
   const selected = requested ?? list[0] ?? null;
   const decisions = selected ? await getDecisions(db, [selected.id]) : [];
+  const zoho = await getZohoSupplyBySku(db);
+  const supply = selected ? zoho.bySku.get(selected.skuId) : undefined;
   const staleRequest = Number.isFinite(recParam) && !requested;
 
   const qs = (v: string, rec?: number) => `/recommendations?view=${v}${rec ? `&rec=${rec}` : ""}`;
@@ -144,6 +147,14 @@ async function RecData({ searchParams }: { searchParams: PageProps<"/recommendat
                 ))}
               </div>
               <p className="mb-4 rounded-lg border border-line bg-white/[0.02] p-3 text-sm leading-relaxed text-ink-2">{selected.reason}</p>
+              {zoho.sync ? (
+                <p className="mb-4 rounded-lg border border-info/30 bg-info/[0.06] p-3 text-[0.8125rem] leading-relaxed text-ink-2">
+                  <strong className="text-ink-1">Zoho (read-only, synced {fmtDateTime(zoho.sync.finishedAt)}):</strong>{" "}
+                  {supply
+                    ? `${fmtNum(supply.onOrder)} units on open purchase orders${supply.openLines[0] ? ` (next expected ${supply.openLines[0].expectedDeliveryDate ? fmtDate(supply.openLines[0].expectedDeliveryDate) : "date not set"})` : ""}; observed lead time ${supply.leadTime ? `${fmtNum(supply.leadTime.median, 1)} days (median of ${supply.leadTime.n})` : "not available"}. Check before approving — the calculated quantity does not net off stock on order.`
+                    : "this SKU is not matched to a Zoho item, so stock on order is unknown."}
+                </p>
+              ) : null}
               <ReviewPanel
                 key={selected.id}
                 recommendationId={selected.id}

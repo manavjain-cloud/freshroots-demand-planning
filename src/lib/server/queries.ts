@@ -5,6 +5,8 @@ import { DATASETS, DATASET_INFO, type Dataset } from "../imports/validate";
 import { backtestMovingAverage, type BacktestResult } from "../analytics/backtest";
 import { compareIsoWeeks, daysBetween, latestCompleteWeek, todayInIndia, weekWindow } from "../weeks";
 import { buildEngineInputs } from "./runs";
+import { getLatestZohoSyncs } from "./zoho-sync";
+import { getZohoStatus } from "../integrations/zoho";
 
 const iso = (d: Date | string | null) => (d === null ? null : new Date(d).toISOString());
 
@@ -407,11 +409,29 @@ export async function getDataHealth(q: Queryable): Promise<DataHealth> {
     status: "info",
     detail: `Loaded ${count("skus")} SKUs and ${count("distributors")} distributors. The case describes 400 active SKUs and 1,200 distributors; this is a pilot sample, not the full ERP.`,
   });
+  const zoho = getZohoStatus();
+  const zs = await getLatestZohoSyncs(q);
+  if (zoho.state === "not_configured") {
+    checks.push({ id: "zoho_supply", label: "Purchase orders and lead times (Zoho)", status: "info", detail: "Zoho Inventory is not connected, so stock on order and lead times are unavailable." });
+  } else if (!zs.latest) {
+    checks.push({ id: "zoho_supply", label: "Purchase orders and lead times (Zoho)", status: "warn", detail: "Zoho credentials are set but no sync has run yet (Rules & Settings → Sync from Zoho)." });
+  } else {
+    const ageDays = Math.floor((Date.now() - Date.parse(zs.latest.finishedAt ?? zs.latest.startedAt)) / 86_400_000);
+    const failed = zs.latest.status !== "succeeded";
+    checks.push({
+      id: "zoho_supply",
+      label: "Purchase orders and lead times (Zoho)",
+      status: failed || ageDays > 7 || zs.latest.warnings.length ? "warn" : "pass",
+      detail: failed
+        ? `Last Zoho sync failed: ${zs.latest.error ?? "unknown error"}.${zs.lastSuccess ? ` Showing data from sync #${zs.lastSuccess.id}.` : ""}`
+        : `Synced ${ageDays} day(s) ago: ${zs.latest.itemsMapped} SKU(s) matched, ${zs.latest.openPoLines} open PO line(s)${zs.latest.warnings.length ? `, ${zs.latest.warnings.length} warning(s)` : ""}.`,
+    });
+  }
   checks.push({
     id: "unavailable_inputs",
     label: "Inputs not supplied",
     status: "info",
-    detail: "Open purchase orders, supplier lead times, prices, costs and confirmed stockout events are not in the seed data and are shown as unavailable.",
+    detail: "Prices, costs and confirmed stockout events are not in the data and are shown as unavailable.",
   });
 
   return {

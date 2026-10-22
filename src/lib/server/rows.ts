@@ -2,7 +2,7 @@ import type { PlanRow } from "@/components/planning-table";
 import type { RecRow } from "./queries";
 
 /** Serializable table row (drops the heavy metrics/steps payload). */
-export function toPlanRow(r: RecRow): PlanRow {
+export function toPlanRow(r: RecRow, onOrder: number | null = null): PlanRow {
   return {
     id: r.id,
     skuId: r.skuId,
@@ -16,6 +16,7 @@ export function toPlanRow(r: RecRow): PlanRow {
     recentAvg: r.recentAvg,
     baselineAvg: r.baselineAvg,
     currentStock: r.currentStock,
+    onOrder,
     weeksOfStock: r.weeksOfStock,
     minWeeks: r.metrics.minWeeks,
     maxWeeks: r.metrics.maxWeeks,

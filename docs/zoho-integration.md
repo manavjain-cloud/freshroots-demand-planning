@@ -1,20 +1,26 @@
-# Zoho Inventory — next-phase integration plan
+# Zoho Inventory integration
 
-**Status: not connected.** This version makes no calls to Zoho. Approving a recommendation records a review decision only; it does not create, send or sync a purchase order.
+**Status: read-only phase built; waiting for credentials.** Setup: [zoho-setup.md](zoho-setup.md).
 
-The interface lives in [`src/lib/integrations/zoho.ts`](../src/lib/integrations/zoho.ts):
+## Phase 1 — read-only (built)
 
-- `getZohoStatus()` reports `not_configured` or `credentials_present_unverified` (reads and writes always disabled).
-- `ZohoInventoryClient` defines the future contract: `fetchOpenPurchaseOrders`, `fetchSupplierLeadTimes`, `createDraftPurchaseOrder`.
-- `disabledZohoClient` is the only implementation and throws `ZohoNotAvailableError`.
+Code: [`src/lib/integrations/zoho.ts`](../src/lib/integrations/zoho.ts) (OAuth refresh, GET-only client, pure transforms) and [`src/lib/server/zoho-sync.ts`](../src/lib/server/zoho-sync.ts) (snapshot storage and per-SKU reads). Schema: [`db/migrations/002_zoho_readonly.sql`](../db/migrations/002_zoho_readonly.sql).
 
-## What is needed before building it
+- Reads `GET /items`, `GET /purchaseorders`, `GET /purchaseorders/{id}` and `GET /purchasereceives` (Zoho Inventory API v1) with the `Zoho-oauthtoken` header and `organization_id`.
+- Maps Zoho items to Freshroots SKUs by the item SKU field.
+- Stores each sync as a snapshot (`zoho_sync_runs`, `zoho_items`, `zoho_po_lines`, `zoho_lead_time_obs`); pages read the latest successful one, so a failed sync never blanks the data.
+- Shows stock on order and observed lead time on the SKU page, review screen, planning table, CSV export and AI facts. **Rules are unchanged**: on-hand stock only (policy decision P9).
+- Never writes to Zoho; `createDraftPurchaseOrder()` always throws. Tests assert the sync makes only GET calls to the Zoho API.
+- Tested with fixtures shaped like the documented responses (`tests/zoho.test.ts`). **Not yet verified against a live Zoho account**: the first real sync should be checked (status names, SKU matching, dates).
 
-1. **API access confirmed** for the Freshroots Zoho Inventory organisation (data centre, e.g. `.in`), and an owner who approves the integration.
-2. **OAuth credentials** (server-side only, as environment variables): `ZOHO_API_DOMAIN`, `ZOHO_ORGANIZATION_ID`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`. Start with read-only scopes.
-3. **Field mappings** verified: Freshroots `SKU_ID` ↔ Zoho item ID; distributor/vendor IDs; units of measure; warehouse/location names.
-4. **Read phase first:** fetch open purchase orders and expected delivery dates so projected cover can include stock already on order, and supplier lead times so "immediate reorder" can be checked against lead time.
-5. **Write phase only after approval:** create *draft* purchase orders from approved/edited decisions only, with idempotency keys, a stored Zoho PO id per decision, and procurement still approving inside Zoho.
-6. Tests against a Zoho sandbox or recorded fixtures before any production write.
+## Phase 2 — draft purchase orders (not built)
 
-Until then the app remains fully usable with CSV imports and manual review.
+Needs explicit approval from the project owner first. Before building it:
+
+1. Confirm the read-only data matches Zoho after the first live sync (status names, SKU matching, dates).
+2. Add the `ZohoInventory.purchaseorders.CREATE` scope only then, on a separate credential if possible.
+3. Agree field mappings for vendors (Freshroots distributor IDs vs Zoho vendor contacts), units and locations.
+4. Create **draft** purchase orders only from approved or edited planner decisions, with an idempotency key, the Zoho PO id stored against the decision, and procurement still approving inside Zoho.
+5. Test against a Zoho test organisation before any production write.
+
+Until then the app remains fully usable with CSV imports, manual review and read-only Zoho data.
