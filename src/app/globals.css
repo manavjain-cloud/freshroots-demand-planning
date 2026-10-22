@@ -106,6 +106,38 @@ h1, h2, h3, h4 {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Pointer lighting (see components/pointer-glow.tsx) ---------- */
+@property --spot {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: false;
+}
+
+/* Soft red light that follows the mouse and brightens the grid under it. */
+.rn-cursor-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: var(--glow-opacity, 0);
+  transition: opacity 400ms ease;
+  background: radial-gradient(560px circle at var(--cursor-x, 50%) var(--cursor-y, 50%), rgba(239, 35, 60, 0.12), rgba(239, 35, 60, 0.035) 38%, transparent 68%);
+}
+.rn-cursor-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(239, 35, 60, 0.28) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(239, 35, 60, 0.28) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(240px circle at var(--cursor-x, 50%) var(--cursor-y, 50%), #000, transparent 72%);
+  mask-image: radial-gradient(240px circle at var(--cursor-x, 50%) var(--cursor-y, 50%), #000, transparent 72%);
+}
+html:not([data-glow="on"]) .rn-cursor-glow {
+  display: none;
+}
+
 /* Animated conic border — used ONLY on primary actions (Run demand planning). */
 @property --rn-angle {
   syntax: "<angle>";
@@ -121,18 +153,44 @@ h1, h2, h3, h4 {
 @layer components {
 /* Cards */
 .rn-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%), var(--surface-1);
+  position: relative;
+  --spot: 0;
+  background:
+    radial-gradient(460px circle at var(--mx, 50%) var(--my, 0%), rgb(239 35 60 / calc(0.11 * var(--spot))), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%),
+    var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 16px;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: --spot 300ms ease, border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+/* Glowing edge that tracks the cursor (masked to a 1px ring). */
+.rn-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 0%), rgb(255 70 90 / calc(0.9 * var(--spot))), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+html[data-glow="on"] .rn-card:hover {
+  --spot: 1;
+  box-shadow: 0 18px 50px -28px rgba(239, 35, 60, 0.55);
 }
 .rn-card-hover:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 0 0 1px rgba(239, 35, 60, 0.08), 0 12px 40px -20px rgba(239, 35, 60, 0.35);
+  border-color: rgba(239, 35, 60, 0.35);
+  box-shadow: 0 0 0 1px rgba(239, 35, 60, 0.1), 0 16px 44px -20px rgba(239, 35, 60, 0.55);
+  transform: translateY(-2px);
 }
 
 /* Buttons */
 .rn-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -142,8 +200,22 @@ h1, h2, h3, h4 {
   font-size: 0.875rem;
   line-height: 1.25rem;
   padding: 0.5rem 0.9rem;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 200ms ease;
   white-space: nowrap;
+}
+/* Light sheen under the cursor while hovering a button. */
+.rn-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.22), transparent 70%);
+  pointer-events: none;
+}
+html[data-glow="on"] .rn-btn:hover:not(:disabled)::before {
+  opacity: 1;
 }
 .rn-btn:disabled {
   opacity: 0.55;
@@ -156,6 +228,7 @@ h1, h2, h3, h4 {
 }
 .rn-btn-primary:hover:not(:disabled) {
   background: #e01733;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 32px -8px rgba(239, 35, 60, 0.9), 0 0 22px rgba(239, 35, 60, 0.45);
 }
 .rn-btn-ghost {
   background: rgba(255, 255, 255, 0.03);
@@ -163,7 +236,9 @@ h1, h2, h3, h4 {
   color: var(--text-1);
 }
 .rn-btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(239, 35, 60, 0.08);
+  border-color: rgba(239, 35, 60, 0.55);
+  box-shadow: 0 0 22px -8px rgba(239, 35, 60, 0.75);
 }
 .rn-btn-danger {
   background: transparent;
@@ -200,6 +275,27 @@ h1, h2, h3, h4 {
   border-color: rgba(239, 35, 60, 0.7);
   box-shadow: 0 0 0 3px rgba(239, 35, 60, 0.18);
 }
+/* Sidebar links */
+.rn-nav-link {
+  position: relative;
+  overflow: hidden;
+}
+.rn-nav-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  background: radial-gradient(140px circle at var(--mx, 20%) var(--my, 50%), rgba(239, 35, 60, 0.22), transparent 70%);
+  pointer-events: none;
+}
+.rn-nav-link:hover::before {
+  opacity: 1;
+}
+.rn-nav-link:hover {
+  box-shadow: inset 0 0 0 1px rgba(239, 35, 60, 0.22);
+}
+
 select.rn-input {
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
@@ -236,8 +332,14 @@ select.rn-input {
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
+.rn-table tbody tr td {
+  transition: background-color 150ms ease;
+}
 .rn-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(239, 35, 60, 0.06);
+}
+.rn-table tbody tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 }
@@ -277,6 +379,9 @@ select.rn-input {
   }
   .rn-conic {
     animation: none;
+  }
+  .rn-cursor-glow {
+    display: none;
   }
 }
 

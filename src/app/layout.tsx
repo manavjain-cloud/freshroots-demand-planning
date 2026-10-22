@@ -6,6 +6,7 @@ import { MobileNav, Sidebar } from "@/components/nav";
 import { TopBarStatus } from "@/components/topbar";
 import { Skeleton } from "@/components/ui";
 import { GlobalToaster } from "@/components/global-toast";
+import { PointerGlow } from "@/components/pointer-glow";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], display: "swap", weight: ["500", "600", "700", "800"] });
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-surface-2 focus:px-3 focus:py-2">
           Skip to content
         </a>
+        <PointerGlow />
         <div className="relative z-10 flex min-h-dvh">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">

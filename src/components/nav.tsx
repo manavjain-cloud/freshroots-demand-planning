@@ -39,7 +39,7 @@ function StaticNavLinks() {
     <ul className="space-y-1">
       {NAV.map(({ href, label, icon: Icon }) => (
         <li key={href}>
-          <Link href={href} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-2 hover:bg-white/[0.04] hover:text-ink-1">
+          <Link href={href} className="rn-nav-link flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-2 hover:text-ink-1">
             <Icon className="size-4 text-ink-3" aria-hidden />
             {label}
           </Link>
@@ -62,12 +62,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active ? "bg-accent/[0.12] text-ink-1" : "text-ink-2 hover:bg-white/[0.04] hover:text-ink-1",
+                "rn-nav-link group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                active ? "bg-accent/[0.12] text-ink-1" : "text-ink-2 hover:text-ink-1",
               )}
             >
               {active ? <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent shadow-[0_0_10px_rgba(239,35,60,0.9)]" aria-hidden /> : null}
-              <Icon className={cn("size-4", active ? "text-accent" : "text-ink-3 group-hover:text-ink-2")} aria-hidden />
+              <Icon className={cn("relative size-4 transition-colors", active ? "text-accent" : "text-ink-3 group-hover:text-accent")} aria-hidden />
               {label}
             </Link>
           </li>
