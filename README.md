@@ -97,7 +97,7 @@ See [docs/data-model.md](docs/data-model.md). The five original seed files are k
 
 ## Testing
 
-`npm test` runs 75 tests, including every case in the brief's test list:
+`npm test` runs 77 tests, including every case in the brief's test list:
 
 | Brief item | Where |
 |---|---|
@@ -108,7 +108,7 @@ See [docs/data-model.md](docs/data-model.md). The five original seed files are k
 | 9–10 zero/missing sales, missing inventory | `tests/engine.test.ts` |
 | 11–12 duplicate rows, invalid SKU/distributor references | `tests/weeks-validate.test.ts`, `tests/workflows.db.test.ts` |
 | 13 conflicting signals | `tests/engine.test.ts` |
-| 14 Gemini timeout, malformed / invalid JSON, 429, invented figures | `tests/ai.test.ts` |
+| 14 Gemini timeout, malformed / off-schema JSON (with one retry), 429, invented figures | `tests/ai.test.ts` |
 | 15 approve / edit / reject / note, guards, superseded runs | `tests/workflows.db.test.ts` |
 | 16 CSV export accuracy and escaping | `tests/workflows.db.test.ts` |
 

@@ -5,12 +5,16 @@ import { AiUnavailableError, generateJson, parseModelJson, type AiConfig } from 
 /* Output schemas                                                      */
 /* ------------------------------------------------------------------ */
 
+/** Strings/lists that run long are trimmed rather than rejected; types and required fields are still enforced. */
+const text = (max: number) => z.string().transform((v) => (v.length > max ? `${v.slice(0, max - 1).trimEnd()}…` : v));
+const list = <T extends z.ZodTypeAny>(item: T, max: number) => z.array(item).transform((a) => a.slice(0, max));
+
 export const ExplanationSchema = z.object({
-  headline: z.string().min(1).max(200),
-  explanation: z.string().min(1).max(1500),
-  key_drivers: z.array(z.string().min(1).max(300)).max(6),
-  planner_checks: z.array(z.string().min(1).max(300)).max(6),
-  caveats: z.array(z.string().min(1).max(300)).max(5),
+  headline: text(240).pipe(z.string().min(1)),
+  explanation: text(1800).pipe(z.string().min(1)),
+  key_drivers: list(text(400), 6),
+  planner_checks: list(text(400), 6),
+  caveats: list(text(400), 5),
 });
 export type Explanation = z.infer<typeof ExplanationSchema>;
 
@@ -29,13 +33,11 @@ export const EXPLANATION_JSON_SCHEMA = {
 };
 
 export const SummarySchema = z.object({
-  headline: z.string().min(1).max(200),
-  summary: z.string().min(1).max(2000),
-  priority_items: z
-    .array(z.object({ sku_id: z.string().min(1).max(40), issue: z.string().min(1).max(300), suggested_check: z.string().min(1).max(300) }))
-    .max(10),
-  exceptions_note: z.string().max(800),
-  data_caveats: z.array(z.string().min(1).max(300)).max(6),
+  headline: text(240).pipe(z.string().min(1)),
+  summary: text(2400).pipe(z.string().min(1)),
+  priority_items: list(z.object({ sku_id: z.string().min(1).max(40), issue: text(400), suggested_check: text(400) }), 10),
+  exceptions_note: text(1000),
+  data_caveats: list(text(400), 6),
 });
 export type PlanningSummary = z.infer<typeof SummarySchema>;
 
@@ -137,37 +139,50 @@ export interface AiGenerated<T> {
   warnings: string[];
 }
 
+/** Call the model and validate; one retry if the reply is malformed or off-schema. */
+async function generateValidated<S extends z.ZodTypeAny>(schema: S, args: Parameters<typeof generateJson>[0]): Promise<{ data: z.infer<S>; provider: string; model: string }> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await generateJson(args);
+    try {
+      const parsed = schema.safeParse(parseModelJson(res.text));
+      if (parsed.success) return { data: parsed.data, provider: res.provider, model: res.model };
+      console.warn("AI response off-schema", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.code}`).join("; "));
+      last = new AiUnavailableError("invalid_response", "The AI response did not match the expected format.");
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last instanceof AiUnavailableError ? last : new AiUnavailableError("invalid_response", "The AI response was not valid JSON.");
+}
+
 export async function generateExplanation(facts: Record<string, unknown>, opts: { config?: AiConfig; fetchImpl?: typeof fetch } = {}): Promise<AiGenerated<Explanation>> {
-  const res = await generateJson({
+  const res = await generateValidated(ExplanationSchema, {
     system: SYSTEM_PROMPT,
     user: `Explain this SKU's rule-engine result for the demand planner.\nFACTS:\n${JSON.stringify(facts, null, 2)}`,
     schemaName: "sku_explanation",
     jsonSchema: EXPLANATION_JSON_SCHEMA,
     ...opts,
   });
-  const parsed = ExplanationSchema.safeParse(parseModelJson(res.text));
-  if (!parsed.success) throw new AiUnavailableError("invalid_response", "The AI response did not match the expected format.");
-  const ungrounded = findUngroundedNumbers(parsed.data, facts);
+  const ungrounded = findUngroundedNumbers(res.data, facts);
   const warnings = ungrounded.length ? [`Figures not found in the calculated facts: ${ungrounded.join(", ")}. Treat them as unverified.`] : [];
-  return { content: parsed.data, provider: res.provider, model: res.model, warnings };
+  return { content: res.data, provider: res.provider, model: res.model, warnings };
 }
 
 export async function generatePlanningSummary(
   facts: Record<string, unknown> & { skus: { sku_id: string }[] },
   opts: { config?: AiConfig; fetchImpl?: typeof fetch } = {},
 ): Promise<AiGenerated<PlanningSummary>> {
-  const res = await generateJson({
+  const res = await generateValidated(SummarySchema, {
     system: SYSTEM_PROMPT,
     user: `Write a concise planning summary of this rule-engine run for the demand planner. Prioritise items needing review.\nFACTS:\n${JSON.stringify(facts, null, 2)}`,
     schemaName: "planning_summary",
     jsonSchema: SUMMARY_JSON_SCHEMA,
     ...opts,
   });
-  const parsed = SummarySchema.safeParse(parseModelJson(res.text));
-  if (!parsed.success) throw new AiUnavailableError("invalid_response", "The AI response did not match the expected format.");
   const known = new Set(facts.skus.map((s) => s.sku_id));
-  const unknownIds = parsed.data.priority_items.filter((p) => !known.has(p.sku_id)).map((p) => p.sku_id);
-  const content = { ...parsed.data, priority_items: parsed.data.priority_items.filter((p) => known.has(p.sku_id)) };
+  const unknownIds = res.data.priority_items.filter((p) => !known.has(p.sku_id)).map((p) => p.sku_id);
+  const content = { ...res.data, priority_items: res.data.priority_items.filter((p) => known.has(p.sku_id)) };
   const warnings: string[] = [];
   if (unknownIds.length) warnings.push(`Removed items referring to unknown SKUs: ${unknownIds.join(", ")}.`);
   const ungrounded = findUngroundedNumbers(content, facts);

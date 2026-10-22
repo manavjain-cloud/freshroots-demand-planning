@@ -59,6 +59,21 @@ describe("14. Gemini failure handling", () => {
     await expect(generateExplanation(FACTS, { config: OR_CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch })).rejects.toBeInstanceOf(AiUnavailableError);
   });
 
+  it("trims over-long fields and lists instead of failing", async () => {
+    const fetchImpl = vi.fn(async () => openRouterResponse({ ...GOOD, explanation: "x".repeat(5000), key_drivers: Array.from({ length: 12 }, () => "driver") }));
+    const g = await generateExplanation(FACTS, { config: OR_CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(g.content.explanation.length).toBe(1800);
+    expect(g.content.key_drivers).toHaveLength(6);
+  });
+
+  it("retries once after an off-schema reply", async () => {
+    let n = 0;
+    const fetchImpl = vi.fn(async () => openRouterResponse(n++ === 0 ? { headline: 42 } : GOOD));
+    const g = await generateExplanation(FACTS, { config: OR_CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(g.content.headline).toBe(GOOD.headline);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("reports upstream rate limiting", async () => {
     const fetchImpl = vi.fn(async () => new Response("{}", { status: 429 }));
     await expect(generateExplanation(FACTS, { config: OR_CONFIG, fetchImpl: fetchImpl as unknown as typeof fetch })).rejects.toMatchObject({ kind: "rate_limited" });
